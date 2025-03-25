@@ -1,0 +1,54 @@
+before_script:
+  - docker login $CI_REGISTRY --username $CI_REGISTRY_USER --password $CI_REGISTRY_PASSWORD
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  image: registry.uicgroup.tech/devops/docker:dind
+  before_script:
+    - docker login $CI_REGISTRY --username $CI_REGISTRY_USER --password $CI_REGISTRY_PASSWORD
+  script:
+    - make vars-input KEYS=$DEV_KEYS 
+    - make build-image TAG=$CI_PIPELINE_IID SERVICE_NAME=$CI_PROJECT_NAME PROJECT_NAME=$CI_PROJECT_NAMESPACE REGISTRY=$CI_REGISTRY ENV_TAG=dev
+    - make push-image TAG=$CI_PIPELINE_IID SERVICE_NAME=$CI_PROJECT_NAME PROJECT_NAME=$CI_PROJECT_NAMESPACE REGISTRY=$CI_REGISTRY ENV_TAG=dev 
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      changes:
+        - package.json
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: always
+
+build-base:
+  stage: build
+  image: registry.uicgroup.tech/devops/docker:dind
+  before_script:
+    - docker login $CI_REGISTRY --username $CI_REGISTRY_USER --password $CI_REGISTRY_PASSWORD
+  script:
+    - make vars-input KEYS=$DEV_KEYS 
+    - make build-base-image TAG=$CI_PIPELINE_IID SERVICE_NAME=$CI_PROJECT_NAME PROJECT_NAME=$CI_PROJECT_NAMESPACE REGISTRY=$CI_REGISTRY ENV_TAG=dev
+    - make push-base-image TAG=$CI_PIPELINE_IID SERVICE_NAME=$CI_PROJECT_NAME PROJECT_NAME=$CI_PROJECT_NAMESPACE REGISTRY=$CI_REGISTRY ENV_TAG=dev 
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      changes:
+        - package.json
+      when: always
+
+deploy_image:
+  stage: deploy
+  variables:
+    GIT_STRATEGY: none
+    GIT_SUBMODULE_STRATEGY: none
+  script:
+    - docker pull $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:dev
+    - docker rm -f unit-study-front
+    - docker run --name unit-study-front -d -p 12934:3000 --restart always $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME:dev
+  only:
+    - master
+  tags: 
+    - 195.26.243.173
+
+
